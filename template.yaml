@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Serverless Load Testing
+
+Globals:
+  Function:
+    Timeout: 15
+    Runtime: nodejs14.x
+    Tracing: Active
+    Architectures:
+      - arm64
+    Layers:
+      - !Ref DependencyLayer
+    Handler: index.handler
+    Environment:
+      Variables:
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+
+Resources:
+  DependencyLayer:
+    Type: AWS::Serverless::LayerVersion
+    Metadata:
+      BuildMethod: nodejs14.x
+    Properties:
+      LayerName: serverless-load-testing-dependency-layer
+      ContentUri: layers/
+      CompatibleRuntimes:
+        - nodejs14.x
+
+  LoadTestBucket:
+    Type: AWS::S3::Bucket
+
+  LoadTestQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 300
+
+  TriggerLoadTestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/trigger-load-test
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !GetAtt LoadTestQueue.Arn
+      Environment:
+        Variables:
+          QUEUE_URL: !Ref LoadTestQueue
+
+  RunNewmanFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/run-newman
+      Timeout: 300
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Join ['', [!GetAtt LoadTestBucket.Arn, '/*']]
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            BatchSize: 5
+            Queue: !GetAtt LoadTestQueue.Arn
+
+  LoadTestMonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardBody: 
+        Fn::Sub:
+          - |-
+            {
+              "widgets": [
+                  {
+                      "type": "metric",
+                      "x": 0,
+                      "y": 0,
+                      "width": 4,
+                      "height": 3,
+                      "properties": {
+                          "metrics": [
+                              [ "AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "${loadTestQueue}" ]
+                          ],
+                          "view": "singleValue",
+                          "region": "${region}",
+                          "title": "Queued Runs",
+                          "period": 300,
+                          "liveData": true,
+                          "setPeriodToTimeRange": true,
+                          "sparkline": false,
+                          "stat": "Maximum"
+                      }
+                  },
+                  {
+                      "type": "metric",
+                      "x": 0,
+                      "y": 3,
+                      "width": 4,
+                      "height": 3,
+                      "properties": {
+                          "metrics": [
+                              [ "load-test", "total-runs" ]
+                          ],
+                          "view": "singleValue",
+                          "title": "Completed Runs",
+                          "region": "${region}",
+                          "stat": "Sum",
+                          "period": 3600,
+                          "setPeriodToTimeRange": true,
+                          "sparkline": false,
+                          "liveData": true
+                      }
+                  },
+                  {
+                      "type": "metric",
+                      "x": 4,
+                      "y": 0,
+                      "width": 6,
+                      "height": 6,
+                      "properties": {
+                          "metrics": [
+                              [ "load-test", "average-run-duration" ],
+                              [ ".", "average-response-time", { "yAxis": "right" } ]
+                          ],
+                          "view": "timeSeries",
+                          "stacked": false,
+                          "region": "${region}",
+                          "stat": "Average",
+                          "period": 300,
+                          "title": "Latency",
+                          "liveData": true
+                      }
+                  }
+              ]
+            }
+          - region: !Ref AWS::Region
+            loadTestQueue: !GetAtt LoadTestQueue.QueueName

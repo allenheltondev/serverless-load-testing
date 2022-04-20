@@ -1,0 +1,15 @@
+{
+  "name": "load-testing-dependency-lambda-layer",
+  "version": "1.0.0",
+  "description": "Lambda layer for dependencies for serverless load testing",
+  "author": "allenheltondev",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.72.0",
+    "@aws-sdk/client-s3": "^3.72.0",
+    "@aws-sdk/client-sqs": "^3.72.0",
+    "newman": "^5.3.2"
+  },
+  "scripts": {},
+  "files": []
+}

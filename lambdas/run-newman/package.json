@@ -1,0 +1,13 @@
+{
+  "name": "run-newman",
+  "version": "1.0.0",
+  "description": "Runs newman with the given input parameters",
+  "main": "index.js",
+  "author": "allenheltondev",
+  "license": "MIT",
+  "scripts": {},
+  "devDependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.72.0",
+    "@aws-sdk/client-s3": "^3.72.0"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "trigger-load-test",
+  "version": "1.0.0",
+  "description": "Starts a load test by queuing up newman runs in SQS",
+  "main": "index.js",
+  "author": "allenheltondev",
+  "license": "MIT",
+  "scripts": {},
+  "devDependencies": {
+    "@aws-sdk/client-sqs": "^3.72.0"
+  }
+}
