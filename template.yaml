@@ -48,9 +48,16 @@ Resources:
               Action:
                 - sqs:SendMessage
               Resource: !GetAtt LoadTestQueue.Arn
+            - Effect: Allow
+              Action:
+                - cloudwatch:GetDashboard
+                - cloudwatch:PutDashboard
+              Resource: 
+                - !Sub arn:${AWS::Partition}:cloudwatch::${AWS::AccountId}:dashboard/${LoadTestMonitoringDashboard}
       Environment:
         Variables:
           QUEUE_URL: !Ref LoadTestQueue
+          DASHBOARD_NAME: !Ref LoadTestMonitoringDashboard
 
   RunNewmanFunction:
     Type: AWS::Serverless::Function
@@ -68,7 +75,7 @@ Resources:
             - Effect: Allow
               Action:
                 - s3:GetObject
-              Resource: !Join ['', [!GetAtt LoadTestBucket.Arn, '/*']]
+              Resource: !Sub ${LoadTestBucket.Arn}/*              
       Events:
         SQSTrigger:
           Type: SQS
@@ -99,9 +106,9 @@ Resources:
                           "title": "Queued Runs",
                           "period": 300,
                           "liveData": true,
-                          "setPeriodToTimeRange": true,
-                          "sparkline": false,
-                          "stat": "Maximum"
+                          "setPeriodToTimeRange": false,
+                          "sparkline": true,
+                          "stat": "Average"
                       }
                   },
                   {

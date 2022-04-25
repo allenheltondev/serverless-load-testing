@@ -40,7 +40,10 @@ To facilitate multiple workflows simultaneously, an array of inputs can be added
       "postmanApiKey": "PMAK-mykey",
       "postmanEnvironmentId": "9876-54-3210"
     }
-  ]
+  ],
+  "options": {
+    "updateDashboardWithDistributionNames": true
+  }
 }
 ```
 
@@ -49,6 +52,7 @@ There are two root level properties that must be passed into the triggering Lamb
 |----|-----------|---------|--------|
 |`count`|The number of times newman should be run as part of the load test|number|yes|
 |`distributions`|The set of business processes and their run weights|array of objects|yes|
+|`options`|Configurable set of options to modify the load test run|object|no|
 
 ----
 `distributions` may contain the following properties:
@@ -61,6 +65,12 @@ There are two root level properties that must be passed into the triggering Lamb
 |`postmanCollectionId`|Unique identifier of the collection hosted in Postman. If provided, the runner will grab the latest version of the collection before starting.|string|no|
 |`postmanEnvironmentId`|Unique identifier of the environment hosted in Postman. If provided, the runner will grab the latest version of the environment before starting.|string|no|
 |`postmanApiKey`|Api key used to authenticate to your Postman account. *Required if postmanCollectionId or postmanEnvironmentId are provided*|string|no|
+----
+`options` may contain the following properties:
+
+|Name|Description|Data Type|Required|
+|----|-----------|---------|--------|
+|`updateDashboardWithDistributionNames`|Updates the CloudWatch monitoring dashboard to include distribution specific metrics from the run|boolean|no|
 
 **NOTE - The sum of all distributions must equal 100!!** If they do not, the load test will not run.
 
