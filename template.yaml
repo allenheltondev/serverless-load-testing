@@ -54,10 +54,22 @@ Resources:
                 - cloudwatch:PutDashboard
               Resource: 
                 - !Sub arn:${AWS::Partition}:cloudwatch::${AWS::AccountId}:dashboard/${LoadTestMonitoringDashboard}
+            - Effect: Allow
+              Action:
+                - lambda:GetFunctionConcurrency
+                - lambda:DeleteFunctionConcurrency
+                - lambda:PutFunctionConcurrency
+              Resource:
+                - !GetAtt RunNewmanFunction.Arn
+            - Effect: Allow
+              Action:
+                - lambda:GetAccountSettings
+              Resource: '*'  
       Environment:
         Variables:
           QUEUE_URL: !Ref LoadTestQueue
           DASHBOARD_NAME: !Ref LoadTestMonitoringDashboard
+          RUNNER_FUNCTION_NAME: !Ref RunNewmanFunction
 
   RunNewmanFunction:
     Type: AWS::Serverless::Function

@@ -42,7 +42,8 @@ To facilitate multiple workflows simultaneously, an array of inputs can be added
     }
   ],
   "options": {
-    "updateDashboardWithDistributionNames": true
+    "updateDashboardWithDistributionNames": true,
+    "throughputLimit": 500
   }
 }
 ```
@@ -71,6 +72,7 @@ There are two root level properties that must be passed into the triggering Lamb
 |Name|Description|Data Type|Required|
 |----|-----------|---------|--------|
 |`updateDashboardWithDistributionNames`|Updates the CloudWatch monitoring dashboard to include distribution specific metrics from the run|boolean|no|
+|`throughputLimit`|Limits the amount of concurrent runners. Range varies based on your AWS account. If omitted, any configured limit will be removed|number|no|
 
 **NOTE - The sum of all distributions must equal 100!!** If they do not, the load test will not run.
 

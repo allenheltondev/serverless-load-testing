@@ -1,36 +1,57 @@
 const { SQSClient, SendMessageBatchCommand } = require('@aws-sdk/client-sqs');
 const { CloudWatchClient, GetDashboardCommand, PutDashboardCommand } = require('@aws-sdk/client-cloudwatch');
+const { LambdaClient, GetAccountSettingsCommand, DeleteFunctionConcurrencyCommand, PutFunctionConcurrencyCommand, GetFunctionConcurrencyCommand } = require('@aws-sdk/client-lambda');
+
 const sqs = new SQSClient();
 const cloudWatch = new CloudWatchClient();
+const lambda = new LambdaClient();
+
 const distributionWidgetTitle = 'Runs by Business Process';
 const failedAssertionWidgetTitle = 'Failed Assertions (avg)';
 
 exports.handler = async (event) => {
-  const distributions = exports.getValidDistributions(event.distributions);
-  if (!distributions.length) {
-    console.error('No valid collections were provided.');
-    return;
+  try {
+    const distributions = exports.getValidDistributions(event.distributions);
+    if (!distributions.length) {
+      console.error('No valid collections were provided.');
+      return;
+    }
+
+    let distributionTotal = 0;
+    distributions.map(d => distributionTotal += d.percentage);
+    if (distributionTotal != 100) {
+      console.error('Provided collection distributions do not equal 100.');
+      return;
+    }
+
+    const currentThroughputLimit = await exports.getCurrentThroughputLimit();
+    if (event.options?.throughputLimit) {
+      const message = await exports.validateProvidedThroughput(currentThroughputLimit, event.options.throughputLimit);
+      if (message) {
+        console.error(message);
+        return;
+      }
+    }
+
+    await exports.setThroughputLimit(event.options?.throughputLimit);
+
+    const events = exports.createLoadTestEvents(event.count ?? 1000, distributions);
+    await exports.queueEvents(events);
+
+    if (event.options?.updateDashboardWithDistributionNames) {
+      await exports.updateDashboardToIncludeDistributions(event.distributions);
+    }
+
+    return {
+      dashboard: `https://${process.env.AWS_REGION}.console.aws.amazon.com/cloudwatch/home?region=${process.env.AWS_REGION}#dashboards:name=${process.env.DASHBOARD_NAME}`,
+      queuedEvents: event.count ?? 1000
+    };
+  } catch (err) {
+    console.error(err);
+    return {
+      message: 'Something went wrong starting the load test'
+    }
   }
-
-  let distributionTotal = 0;
-  distributions.map(d => distributionTotal += d.percentage);
-  if (distributionTotal != 100) {
-    console.error('Provided collection distributions do not equal 100.');
-    return;
-  }
-
-  const events = exports.createLoadTestEvents(event.count ?? 1000, distributions);
-
-  await exports.queueEvents(events);
-
-  if (event.options?.updateDashboardWithDistributionNames) {
-    await exports.updateDashboardToIncludeDistributions(event.distributions);
-  }
-
-  return {
-    dashboard: `https://${process.env.AWS_REGION}.console.aws.amazon.com/cloudwatch/home?region=${process.env.AWS_REGION}#dashboards:name=${process.env.DASHBOARD_NAME}`,
-    queuedEvents: event.count ?? 1000
-  };
 };
 
 exports.getValidDistributions = (distributions) => {
@@ -122,7 +143,7 @@ exports.updateDashboardWithDistributionNames = (dashboard, distributions) => {
       distributionWidget.properties.metrics.push(['load-test', 'runs', 'Collection', d.name]);
     }
 
-    if(d.name && !failedAssertionWidget.properties.metrics.some(m => m.includes(d.name))) {
+    if (d.name && !failedAssertionWidget.properties.metrics.some(m => m.includes(d.name))) {
       failedAssertionWidget.properties.metrics.push(['load-test', 'failed-assertions', 'Collection', d.name]);
     }
   });
@@ -186,4 +207,38 @@ exports.getDistributionWidget = (dashboard) => {
     dashboard.widgets.push(distributionWidget);
   }
   return distributionWidget;
+};
+
+exports.validateProvidedThroughput = async (currentThroughputLimit, amount) => {
+  const response = await lambda.send(new GetAccountSettingsCommand());
+  let limit = response.AccountLimit.UnreservedConcurrentExecutions;
+  if (currentThroughputLimit) {
+    limit += currentThroughputLimit;
+  }
+
+  if (amount > limit) {
+    return `The configured amount of ${amount} exceeds the allowed number of ${response.AccountLimit.UnreservedConcurrentExecutions}.`;
+  }
+};
+
+exports.setThroughputLimit = async (amount) => {
+  if (amount) {
+    await lambda.send(new PutFunctionConcurrencyCommand({
+      FunctionName: process.env.RUNNER_FUNCTION_NAME,
+      ReservedConcurrentExecutions: amount
+    }));
+  }
+  else {
+    await lambda.send(new DeleteFunctionConcurrencyCommand({
+      FunctionName: process.env.RUNNER_FUNCTION_NAME
+    }));
+  }
+};
+
+exports.getCurrentThroughputLimit = async () => {
+  const response = await lambda.send(new GetFunctionConcurrencyCommand({
+    FunctionName: process.env.RUNNER_FUNCTION_NAME
+  }));
+
+  return response?.ReservedConcurrentExecutions;
 };
