@@ -37,7 +37,7 @@ exports.handler = async (event) => {
     await Promise.all([
       exports.setThroughputLimit(event.options?.throughputLimit),
       exports.setBatchSize(event.options?.batchSize),
-      exports.updateDashboardToIncludeDistributions(event.options?.updateDashboardToIncludeDistributions, event.distributions)
+      exports.updateDashboardToIncludeDistributions(event.options?.updateDashboardWithDistributionNames, event.distributions)
     ]);
 
     const events = exports.createLoadTestEvents(event.count ?? 1000, distributions);
@@ -121,12 +121,14 @@ exports.queueEvents = async (events) => {
 };
 
 exports.updateDashboardToIncludeDistributions = async (shouldUpdateDashboard, distributions) => {
-  if(!shouldUpdateDashboard){
+  if (!shouldUpdateDashboard) {
     return;
   }
 
   let dashboard = await exports.getLoadTestDashboard();
-  if (!dashboard) return;
+  if (!dashboard) {
+    return;
+  }
 
   dashboard = exports.updateDashboardWithDistributionNames(dashboard, distributions);
   await cloudWatch.send(new PutDashboardCommand({ DashboardName: process.env.DASHBOARD_NAME, DashboardBody: JSON.stringify(dashboard) }));
@@ -166,10 +168,7 @@ exports.getFailedAssertionWidget = (dashboard) => {
       width: 6,
       height: 6,
       properties: {
-        metrics: [
-          ["load-test", "failed-assertions", "Collection", "Trial Run B"],
-          ["...", "Trial Run A"]
-        ],
+        metrics: [],
         view: 'timeSeries',
         stacked: true,
         region: process.env.AWS_REGION,
