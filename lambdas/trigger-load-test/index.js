@@ -1,6 +1,7 @@
 const { SQSClient, SendMessageBatchCommand } = require('@aws-sdk/client-sqs');
 const { CloudWatchClient, GetDashboardCommand, PutDashboardCommand } = require('@aws-sdk/client-cloudwatch');
-const { LambdaClient, GetAccountSettingsCommand, DeleteFunctionConcurrencyCommand, PutFunctionConcurrencyCommand, GetFunctionConcurrencyCommand } = require('@aws-sdk/client-lambda');
+const { LambdaClient, GetAccountSettingsCommand, DeleteFunctionConcurrencyCommand, PutFunctionConcurrencyCommand,
+  GetFunctionConcurrencyCommand, UpdateEventSourceMappingCommand } = require('@aws-sdk/client-lambda');
 
 const sqs = new SQSClient();
 const cloudWatch = new CloudWatchClient();
@@ -33,14 +34,14 @@ exports.handler = async (event) => {
       }
     }
 
-    await exports.setThroughputLimit(event.options?.throughputLimit);
+    await Promise.all([
+      exports.setThroughputLimit(event.options?.throughputLimit),
+      exports.setBatchSize(event.options?.batchSize),
+      exports.updateDashboardToIncludeDistributions(event.options?.updateDashboardToIncludeDistributions, event.distributions)
+    ]);
 
     const events = exports.createLoadTestEvents(event.count ?? 1000, distributions);
     await exports.queueEvents(events);
-
-    if (event.options?.updateDashboardWithDistributionNames) {
-      await exports.updateDashboardToIncludeDistributions(event.distributions);
-    }
 
     return {
       dashboard: `https://${process.env.AWS_REGION}.console.aws.amazon.com/cloudwatch/home?region=${process.env.AWS_REGION}#dashboards:name=${process.env.DASHBOARD_NAME}`,
@@ -119,7 +120,11 @@ exports.queueEvents = async (events) => {
   }));
 };
 
-exports.updateDashboardToIncludeDistributions = async (distributions) => {
+exports.updateDashboardToIncludeDistributions = async (shouldUpdateDashboard, distributions) => {
+  if(!shouldUpdateDashboard){
+    return;
+  }
+
   let dashboard = await exports.getLoadTestDashboard();
   if (!dashboard) return;
 
@@ -241,4 +246,17 @@ exports.getCurrentThroughputLimit = async () => {
   }));
 
   return response?.ReservedConcurrentExecutions;
+};
+
+exports.setBatchSize = async (batchSize) => {
+  if (!batchSize || batchSize > 100) {
+    batchSize = Number(process.env.DEFAULT_BATCH_SIZE);
+  }
+
+  await lambda.send(new UpdateEventSourceMappingCommand({
+    UUID: process.env.EVENT_SOURCE_MAPPING_ID,
+    FunctionName: process.env.RUNNER_FUNCTION_NAME,
+    BatchSize: batchSize,
+    Enabled: true
+  }));
 };
