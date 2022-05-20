@@ -1,4 +1,5 @@
 const newman = require('newman');
+const fs = require('fs');
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
 
@@ -12,9 +13,18 @@ exports.handler = async (event) => {
     const result = await exports.performRun(runDetails);
     await exports.logRunMetrics(result, runDetails.name);
     if (result.failures?.length) {
-      console.warn(JSON.stringify({ type: 'Postman Failed Assertions', failures: result.failures }));
+      let type = 'Postman Failed Assertions';
+      if (runDetails.name) {
+        type = `${type} (${runDetails.name})`;
+      }
+
+      console.warn(JSON.stringify({ type: type, failures: result.failures }));
+    } else if (runDetails.name) {
+      console.log(`Successfully ran ${runDetails.name} with no failed assertions`);
     }
   }));
+
+  exports.cleanupNewmanReports();
 };
 
 exports.performRun = async (event) => {
@@ -26,9 +36,9 @@ exports.performRun = async (event) => {
   return runReport;
 };
 
-exports.getDataFromS3 = async (objectKey) => {
+exports.getObjectFromS3 = async (objectKey) => {
   const buffer = await exports.getObjectBuffer(objectKey);
-  return JSON.parse(buffer.ToString());
+  return JSON.parse(buffer.toString());
 };
 
 exports.getObjectBuffer = async (objectKey) => {
@@ -56,7 +66,7 @@ exports.getDataFromS3 = async (objectKey) => {
     return document.value
   }
 
-  const data = await exports.getDataFromS3(objectKey);
+  const data = await exports.getObjectFromS3(objectKey);
   s3Objects.push({
     key: objectKey,
     value: data
@@ -100,11 +110,18 @@ exports.runNewman = async (collection, environment) => {
   });
 };
 
+exports.cleanupNewmanReports = () => {
+  const fileNames = fs.readdirSync('/tmp/');
+  for (let fileName of fileNames) {
+    fs.unlinkSync(`/tmp/${fileName}`);
+  }
+};
+
 exports.processResults = (result) => {
   const failures = result.failures.map(failure => {
     return {
       request: failure.source.name,
-      url: `${failure.source.request.method} ${failure.source.request.url.host.join('.')}${failure.source.request.url.path.length ? '/' + failure.source.request.url.path.join('/') : ''}`,
+      //url: `${failure.source.request.method} ${failure.source.request.url.host.join('.')}${failure.source.request.url.path.length ? '/' + failure.source.request.url.path.join('/') : ''}`,
       test: failure.error.test,
       message: failure.error.message
     }

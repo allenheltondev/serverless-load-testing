@@ -6,7 +6,7 @@ Description: >
 Globals:
   Function:
     Timeout: 15
-    Runtime: nodejs14.x
+    Runtime: nodejs16.x
     Tracing: Active
     Architectures:
       - arm64
@@ -82,7 +82,10 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: lambdas/run-newman
-      Timeout: 300
+      Timeout: 900
+      MemorySize: 1024
+      EphemeralStorage:
+        Size: 1024
       Policies:
         - AWSLambdaBasicExecutionRole
         - Version: 2012-10-17
@@ -100,7 +103,10 @@ Resources:
                 - sqs:ReceiveMessage
                 - sqs:DeleteMessage
                 - sqs:GetQueueAttributes
-              Resource: !GetAtt LoadTestQueue.Arn                  
+              Resource: !GetAtt LoadTestQueue.Arn
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref LoadTestBucket             
 
   SQSEventSourceMapping:
     Type: AWS::Lambda::EventSourceMapping
