@@ -1,12 +1,10 @@
 const newman = require('newman');
-const fs = require('fs');
 const { workerData } = require('node:worker_threads');
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
 
 const cloudWatch = new CloudWatchClient();
 const s3 = new S3Client();
-const s3Objects = [];
 
 exports.start = async (runDetails) => {
   const result = await exports.performRun(runDetails);
@@ -59,16 +57,7 @@ exports.getDataFromPostman = (type, id, apiKey) => {
 };
 
 exports.getDataFromS3 = async (objectKey) => {
-  const document = s3Objects.find(obj => obj.key == objectKey);
-  if (document) {
-    return document.value
-  }
-
   const data = await exports.getObjectFromS3(objectKey);
-  s3Objects.push({
-    key: objectKey,
-    value: data
-  });
 
   return data;
 };
@@ -108,18 +97,11 @@ exports.runNewman = async (collection, environment) => {
   });
 };
 
-exports.cleanupNewmanReports = () => {
-  const fileNames = fs.readdirSync('/tmp/');
-  for (let fileName of fileNames) {
-    fs.unlinkSync(`/tmp/${fileName}`);
-  }
-};
-
 exports.processResults = (result) => {
   const failures = result.failures.map(failure => {
     return {
       request: failure.source.name,
-      //url: `${failure.source.request.method} ${failure.source.request.url.host.join('.')}${failure.source.request.url.path.length ? '/' + failure.source.request.url.path.join('/') : ''}`,
+      url: `${failure.source.request.method} ${failure.source.request.url.host.join('.')}${failure.source.request.url.path.length ? '/' + failure.source.request.url.path.join('/') : ''}`,
       test: failure.error.test,
       message: failure.error.message
     }
