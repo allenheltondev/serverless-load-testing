@@ -34,7 +34,7 @@ Resources:
   LoadTestQueue:
     Type: AWS::SQS::Queue
     Properties:
-      VisibilityTimeout: 300
+      VisibilityTimeout: 390
 
   TriggerLoadTestFunction:
     Type: AWS::Serverless::Function
@@ -82,7 +82,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: lambdas/run-newman
-      Timeout: 900
+      Timeout: 360
       MemorySize: 1024
       EphemeralStorage:
         Size: 1024
